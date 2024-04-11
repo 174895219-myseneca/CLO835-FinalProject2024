@@ -6,6 +6,7 @@ metadata:
   labels:
     my_maniType: pod
 spec:
+  serviceAccountName: s3-access-sa
   containers:
     - name: mysql-container
       image: 544378344870.dkr.ecr.us-east-1.amazonaws.com/clo835-week4:mysql

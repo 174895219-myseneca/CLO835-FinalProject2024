@@ -1,0 +1,6 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: s3-access-sa
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::544378344870:role/my-s3-access-role
