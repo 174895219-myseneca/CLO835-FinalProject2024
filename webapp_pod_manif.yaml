@@ -7,6 +7,7 @@ metadata:
     my_maniType: pod
     version: v1
 spec:
+  serviceAccountName: s3-access-sa
   containers:
     - name: myappcontainer
       image: 544378344870.dkr.ecr.us-east-1.amazonaws.com/clo835-week4:app
@@ -30,7 +31,7 @@ spec:
         - name: APP_COLOR
           value: "blue"
       ports:
-        - containerPort: 80
+        - containerPort: 81
   dnsPolicy: ClusterFirst
   restartPolicy: Always
 
