@@ -21,15 +21,20 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
           AWS_REGION: us-east-1
-          
+
       - name: Build and push MySQL image to Amazon ECR
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: finalproject-mysql
           IMAGE_TAG: mysql-${{ github.run_number }}  
         run: |
+          ls -ltra
+          cd docker
           echo "Building MySQL Image..."
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f Dockerfile_mysql .
+          # Unit test
+          docker run -d --name mysql -e MYSQL_ROOT_PASSWORD=pw $ECR_REGISTRY/$ECR_REPOSITORY_DB:$IMAGE_TAG_DB
+          docker ps
           echo "Pushing MySQL Image..."
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
@@ -39,6 +44,7 @@ jobs:
           ECR_REPOSITORY: finalproject-webapp
           IMAGE_TAG: webapp-${{ github.run_number }}  
         run: |
+          cd docker
           echo "Building Flask WebAPP Image..."
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f Dockerfile .
           echo "Running tests..."
