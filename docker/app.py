@@ -73,23 +73,13 @@ def FetchData():
     output = {}
     select_sql = "SELECT emp_id, first_name, last_name, primary_skills, location from employee where emp_id=%s"
     cursor = db_conn.cursor()
-    try:
-        cursor.execute(select_sql, (emp_id,))
-        result = cursor.fetchone()
-        if result:
-            output = {
-                "emp_id": result[0],
-                "first_name": result[1],
-                "last_name": result[2],
-                "primary_skills": result[3],  
-                "location": result[4]
-            }
-    except Exception as e:
-        print("Failed to fetch data:", e)
-    finally:
-        cursor.close()
+   
+   if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--color', required=False, help="Set the color for the app")
+    args = parser.parse_args()
 
-    return render_template("getempoutput.html", **output, color=color_codes[COLOR])
+    COLOR = args.color if args.color else random.choice(list(color_codes.keys()))
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=81, debug=False)
