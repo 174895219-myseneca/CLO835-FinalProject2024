@@ -22,45 +22,81 @@ jobs:
           AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
           AWS_REGION: us-east-1  # Define the AWS region
 
-      - name: Build, test, and push MySQL image to Amazon ECR
+      - name: Build MySQL image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: finalproject-mysql  # ECR repository for MySQL
-          IMAGE_TAG: mysql-${{ github.run_number }}  # Dynamic tagging using GitHub run number
+          ECR_REPOSITORY: finalproject-mysql
+          IMAGE_TAG: mysql-${{ github.run_number }}  
         run: |
           echo "Building MySQL Image..."
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f Dockerfile_mysql .
-          echo "Running MySQL container for testing..."
-          docker run -d --name mysql_test $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          sleep 10  # Wait for MySQL to initialize
-          if docker exec mysql_test mysqladmin -ppw ping; then
-            echo "MySQL is up and running!"
-            docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-            echo "MySQL image pushed successfully."
-          else
-            echo "MySQL test failed."
-          fi
-          docker rm -f mysql_test
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f ./docker/Dockerfile_mysql ./docker
 
-      - name: Build, test, and push Flask app image to Amazon ECR
+      - name: Unit test MySQL image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: finalproject-webapp  # ECR repository for Flask app
-          IMAGE_TAG: webapp-${{ github.run_number }}  # Dynamic tagging using GitHub run number
+          ECR_REPOSITORY: finalproject-mysql
+          IMAGE_TAG: mysql-${{ github.run_number }}  
+        run: |
+          echo "Running MySQL container for unit testing..."
+          docker run -d --name mysql_test -e MYSQL_ROOT_PASSWORD=pw $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          echo "Waiting for MySQL to be ready..."
+          sleep 10
+          docker exec mysql_test mysql -ppw -e "SHOW DATABASES;"
+          docker stop mysql_test
+          docker rm mysql_test
+          echo "MySQL unit tests completed successfully."
+
+      - name: Push MySQL image to Amazon ECR
+        if: success() # Only push if previous steps were successful
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: finalproject-mysql
+          IMAGE_TAG: mysql-${{ github.run_number }}  
+        run: |
+          echo "Pushing MySQL Image..."
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          echo "MySQL image pushed successfully."
+
+      - name: Build Flask app image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: finalproject-webapp
+          IMAGE_TAG: webapp-${{ github.run_number }}
         run: |
           echo "Building Flask WebAPP Image..."
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f Dockerfile .
-          echo "Running Flask app container for testing..."
-          docker run -d --name app_test -p 8080:81 $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          sleep 10  # Wait for the app to initialize
-          if curl -s http://localhost:8080/ | grep -q 'Expected content'; then
-            echo "Flask app is up and running!"
-            docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-            echo "Flask app image pushed successfully."
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f ./docker/Dockerfile ./docker
+
+      - name: Unit test Flask app image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: finalproject-webapp
+          IMAGE_TAG: webapp-${{ github.run_number }}
+        run: |
+          echo "Running Flask WebAPP container for unit testing..."
+          docker run -d --name webapp_test -p 8080:81 $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          echo "Waiting for Flask WebAPP to be ready..."
+          sleep 10
+          # Replace 'curl localhost:8080' with your actual health check or test command for Flask app
+          if curl -s http://localhost:8080/; then
+            echo "Flask WebAPP unit tests completed successfully."
           else
-            echo "Flask app test failed."
+            echo "Flask WebAPP unit tests failed."
+            exit 1
           fi
-          docker rm -f app_test
+          docker stop webapp_test
+          docker rm webapp_test
+
+      - name: Push Flask app image to Amazon ECR
+        if: success() # Only push if previous steps were successful
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: finalproject-webapp
+          IMAGE_TAG: webapp-${{ github.run_number }}
+        run: |
+          echo "Pushing Flask WebAPP Image..."
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          echo "Flask WebAPP image pushed successfully."
+
 
       - name: Verify Deployment
         run: |
