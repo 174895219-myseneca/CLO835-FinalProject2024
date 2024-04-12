@@ -6,17 +6,18 @@ import argparse
 
 app = Flask(__name__)
 
-DBHOST = os.environ.get("DBHOST") or "localhost"
-DBUSER = os.environ.get("DBUSER") or "root"
-DBPWD = os.environ.get("DBPWD") or "password"  # Corrected typo from 'passwors' to 'password'
-DATABASE = os.environ.get("DATABASE") or "employees"
-DBPORT = int(os.environ.get("DBPORT") or 3306)
+# Corrected the environment variable names
+DBHOST = os.environ.get("DBHOST", "localhost")
+DBUSER = os.environ.get("DBUSER", "root")
+DBPWD = os.environ.get("DBPWD", "password")
+DATABASE = os.environ.get("DATABASE", "employees")
+DBPORT = int(os.environ.get("DBPORT", 3306))
 
 db_conn = connections.Connection(
     host=DBHOST,
     port=DBPORT,
     user=DBUSER,
-    password=DBPWD, 
+    password=DBPWD,
     db=DATABASE
 )
 
@@ -48,12 +49,15 @@ def AddEmp():
     primary_skill = request.form['primary_skill']
     location = request.form['location']
 
-    insert_sql = "INSERT INTO employee VALUES (%s, %s, %s, %s, %s)"
+    
+    insert_sql = "INSERT INTO employee (first_name, last_name, primary_skill, location) VALUES (%s, %s, %s)"
     cursor = db_conn.cursor()
     try:
-        cursor.execute(insert_sql, (emp_id, first_name, last_name, primary_skill, location))
+        cursor.execute(insert_sql, (first_name, last_name, primary_skill, location))  
         db_conn.commit()
         emp_name = first_name + " " + last_name
+    except Exception as e:
+        print("Failed to insert data:", e)
     finally:
         cursor.close()
 
@@ -67,7 +71,7 @@ def GetEmp():
 def FetchData():
     emp_id = request.form['emp_id']
     output = {}
-    select_sql = "SELECT emp_id, first_name, last_name, primary_skill, location from employee where emp_id=%s"
+    select_sql = "SELECT emp_id, first_name, last_name, primary_skills, location from employee where emp_id=%s"
     cursor = db_conn.cursor()
     try:
         cursor.execute(select_sql, (emp_id,))
@@ -77,15 +81,15 @@ def FetchData():
                 "emp_id": result[0],
                 "first_name": result[1],
                 "last_name": result[2],
-                "primary_skills": result[3],
+                "primary_skills": result[3],  
                 "location": result[4]
             }
     except Exception as e:
-        print(e)
+        print("Failed to fetch data:", e)
     finally:
         cursor.close()
 
     return render_template("getempoutput.html", **output, color=color_codes[COLOR])
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=81, debug=True)
+    app.run(host='0.0.0.0', port=81, debug=False)
