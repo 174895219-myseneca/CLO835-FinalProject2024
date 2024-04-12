@@ -4,23 +4,25 @@ import os
 import random
 import argparse
 import boto3
-import botocore
+from botocore.exceptions import NoCredentialsError, ClientError
 
 app = Flask(__name__)
 
-# Environment Configuration
-DBHOST = os.getenv("DBHOST", "localhost")
-DBUSER = os.getenv("DBUSER", "root")
-DBPWD = os.getenv("DBPWD", "password")  # This should ideally come from K8s secrets
-DATABASE = os.getenv("DATABASE", "employees")
-DBPORT = int(os.getenv("DBPORT", 3306))
+DBHOST = os.environ.get("DBHOST", "localhost")
+DBUSER = os.environ.get("DBUSER", "root")
+DBPWD = os.environ.get("DBPWD", "password")  # Consider securing your database password
+DATABASE = os.environ.get("DATABASE", "employees")
+COLOR_FROM_ENV = os.environ.get('APP_COLOR', "lime")
+DBPORT = int(os.environ.get("DBPORT", 3306))
+BACKGROUND_IMAGE = os.environ.get("BACKGROUND_IMAGE", "Invalid Image been passed")
+GROUP_NAME = os.environ.get('GROUP_NAME', "GROUP11")
+
+# AWS S3 Credentials
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
-S3_BUCKET = os.getenv("S3_BUCKET")
-BACKGROUND_IMAGE_KEY = os.getenv("BACKGROUND_IMAGE_KEY")
-GROUP_NAME = os.getenv('GROUP_NAME', 'GROUP11')
+AWS_SESSION_TOKEN = os.getenv("AWS_SESSION_TOKEN", None)  # This is optional and used for temporary credentials
 
-# Supported Colors
+# Define the supported color codes
 color_codes = {
     "red": "#e74c3c",
     "green": "#16a085",
@@ -30,97 +32,53 @@ color_codes = {
     "darkblue": "#130f40",
     "lime": "#C1FF9C",
 }
-COLOR = random.choice(list(color_codes.values()))
 
-# Database Connection - Credentials should be managed via K8s secrets
-db_conn = connections.Connection(
-    host=DBHOST, port=DBPORT, user=DBUSER, password=DBPWD, db=DATABASE
-)
+SUPPORTED_COLORS = ",".join(color_codes.keys())
+COLOR = random.choice(list(color_codes.keys()))
 
-@app.route('/', methods=['GET', 'POST'])
+@app.route("/", methods=['GET', 'POST'])
 def home():
-    # image_url = fetch_background_image_url()  # This line should be uncommented to fetch the image from S3
-    image_url = url_for('static', filename='default.png')  # Placeholder for background image
-    return render_template('addemp.html', background_image=image_url, group_name=GROUP_NAME)
+    download_background_image(BACKGROUND_IMAGE)
+    image_url = url_for('static', filename='background_image.png')
+    group_name = GROUP_NAME
+    return render_template('addemp.html', background_image=image_url, group_name=group_name)
 
-# Function to fetch image URL from S3 - To be used if fetching images from S3
-# def fetch_background_image_url():
-#     """Fetches the presigned URL of the background image from S3."""
-#     s3_client = boto3.client('s3', aws_access_key_id=AWS_ACCESS_KEY_ID, aws_secret_access_key=AWS_SECRET_ACCESS_KEY)
-#     try:
-#         response = s3_client.generate_presigned_url('get_object',
-#                                                     Params={'Bucket': S3_BUCKET, 'Key': BACKGROUND_IMAGE_KEY},
-#                                                     ExpiresIn=3600)
-#         print("Background Image URL: ", response)  # Log entry for the background image URL
-#         return response
-#     except ClientError as e:
-#         print(f"Failed to get presigned URL due to: {e}")
-#         return url_for('static', filename='default.png')  # Fallback image
-#     return response
-
-@app.route('/about', methods=['GET', 'POST'])
-def about():
-    # image_url = fetch_background_image_url()  # Uncomment to use live background image fetching
-    image_url = url_for('static', filename='default.png')
-    return render_template('about.html', background_image=image_url, group_name=GROUP_NAME)
-
-@app.route('/addemp', methods=['POST'])
-def AddEmp():
-    emp_id = request.form['emp_id']
-    first_name = request.form['first_name']
-    last_name = request.form['last_name']
-    primary_skill = request.form['primary_skill']
-    location = request.form['location']
-    insert_sql = "INSERT INTO employee VALUES (%s, %s, %s, %s, %s)"
-    
-    cursor = db_conn.cursor()
+def download_background_image(image_url):
     try:
-        cursor.execute(insert_sql, (emp_id, first_name, last_name, primary_skill, location))
-        db_conn.commit()
-        emp_name = f"{first_name} {last_name}"
-    except Exception as e:
-        print(f"Error inserting employee: {e}")
-        emp_name = "Error adding employee"
-    finally:
-        cursor.close()
+        if not image_url.startswith("http"):
+            print("BACKGROUND_IMAGE is not a valid URL.")
+            return
 
-    # image_url = fetch_background_image_url()  # Uncomment for S3 image
-    image_url = url_for('static', filename='default.png')
-    return render_template('addempoutput.html', name=emp_name, background_image=image_url, group_name=GROUP_NAME)
+        bucket_name = image_url.split('/')[2].split('.')[0]
+        object_key = '/'.join(image_url.split('/')[3:])
+        
+        s3_client = boto3.client(
+            's3',
+            aws_access_key_id=AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+            aws_session_token=AWS_SESSION_TOKEN  
+        )
 
-@app.route('/getemp', methods=['GET', 'POST'])
-def GetEmp():
-    # image_url = fetch_background_image_url()  # Uncomment this line for S3 background images
-    image_url = url_for('static', filename='default.png')
-    return render_template("getemp.html", background_image=image_url, group_name=GROUP_NAME)
-
-@app.route('/fetchdata', methods=['POST'])
-def FetchData():
-    emp_id = request.form['emp_id']
-    select_sql = "SELECT emp_id, first_name, last_name, primary_skill, location from employee where emp_id = %s"
+        local_filename = "static/background_image.png"
+        s3_client.download_file(bucket_name, object_key, local_filename)
+        print("Background image downloaded successfully from S3.")
     
-    cursor = db_conn.cursor()
-    output = {}
-    try:
-        cursor.execute(select_sql, (emp_id,))
-        result = cursor.fetchone()
-        if result:
-            output = {
-                "emp_id": result[0],
-                "first_name": result[1],
-                "last_name": result[2],
-                "primary_skills": result[3],
-                "location": result[4]
-            }
+    except ClientError as e:
+        print(f"Failed to download from S3: {e}")
     except Exception as e:
-        print(f"Error fetching data: {e}")
-        output["error"] = "Error fetching employee data"
-    finally:
-        cursor.close()
+        print(f"Error downloading background image: {e}")
 
-    # image_url = fetch_background_image_url()  # Uncomment to integrate real-time S3 fetching
-    image_url = url_for('static', filename='default.png')
-    return render_template("getempoutput.html", **output, background_image=image_url, group_name=GROUP_NAME)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=81, debug=True)  # Ensure the application runs on port 81 in debug mode
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--color', required=False, help="Set the color of the application background.")
+    args = parser.parse_args()
+
+    if args.color and args.color in color_codes:
+        COLOR = args.color
+    elif COLOR_FROM_ENV and COLOR_FROM_ENV in color_codes:
+        COLOR = COLOR_FROM_ENV
+    else:
+        print(f"Using a random color: {COLOR}")
+    
+    app.run(host='0.0.0.0', port=81, debug=True)
