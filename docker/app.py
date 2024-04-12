@@ -1,52 +1,63 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, url_for
 from pymysql import connections
 import os
 import boto3
 from botocore.exceptions import ClientError
 import argparse
+import random
 
 app = Flask(__name__)
 
-# Configurations directly from environment variables
-DBHOST = os.environ.get("DBHOST", "localhost")
-DBUSER = os.environ.get("DBUSER", "root")
-DBPWD = os.environ.get("DBPWD", "password")
-DATABASE = os.environ.get("DATABASE", "employees")
-DBPORT = int(os.environ.get("DBPORT", 3306))
-AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID")
-AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY")
-S3_BUCKET = os.environ.get("S3_BUCKET")
-BACKGROUND_IMAGE_KEY = os.environ.get("BACKGROUND_IMAGE_KEY")
+# Environment Configuration
+DBHOST = os.getenv("DBHOST", "localhost")
+DBUSER = os.getenv("DBUSER", "root")
+DBPWD = os.getenv("DBPWD", "passwors")  # Assumed to be intentionally misspelled for example purposes
+DATABASE = os.getenv("DATABASE", "employees")
+DBPORT = int(os.getenv("DBPORT", 3306))
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+S3_BUCKET = os.getenv("S3_BUCKET")
+BACKGROUND_IMAGE_KEY = os.getenv("BACKGROUND_IMAGE_KEY")
+GROUP_NAME = os.getenv('GROUP_NAME', 'GROUP11')
 
+# Supported Colors
+color_codes = {
+    "red": "#e74c3c",
+    "green": "#16a085",
+    "blue": "#89CFF0",
+    "blue2": "#30336b",
+    "pink": "#f4c2c2",
+    "darkblue": "#130f40",
+    "lime": "#C1FF9C",
+}
+COLOR = random.choice(list(color_codes.values()))
+
+# Database Connection
 db_conn = connections.Connection(
-    host=DBHOST,
-    port=DBPORT,
-    user=DBUSER,
-    password=DBPWD,
-    db=DATABASE
+    host=DBHOST, port=DBPORT, user=DBUSER, password=DBPWD, db=DATABASE
 )
 
-def download_s3_image():
-    s3_client = boto3.client('s3', aws_access_key_id=AWS_ACCESS_KEY_ID, aws_secret_access_key=AWS_SECRET_ACCESS_KEY)
-    image_path = 'static/background_image.png'
-    try:
-        with open(image_path, 'wb') as f:
-            s3_client.download_fileobj(S3_BUCKET, BACKGROUND_IMAGE_KEY, f)
-        print(f"Successfully downloaded background image from S3 bucket {S3_BUCKET}.")
-        return url_for('static', filename='background_image.png')
-    except botocore.exceptions.ClientError as error:
-        print(f"Error downloading image from S3: {error}")
-        return url_for('static', filename='default.png')
-
-@app.route("/")
+@app.route("/", methods=['GET', 'POST'])
 def home():
-    image_url = download_s3_image()
-    return render_template('addemp.html', background_image=image_url)
+    image_url = fetch_background_image_url()
+    return render_template('addemp.html', background_image=image_url, group_name=GROUP_NAME)
 
-@app.route("/about", methods=['GET','POST'])
+def fetch_background_image_url():
+    """Fetches the presigned URL of the background image from S3."""
+    s3_client = boto3.client('s3', aws_access_key_id=AWS_ACCESS_KEY_ID, aws_secret_access_key=AWS_SECRET_ACCESS_KEY)
+    try:
+        response = s3_client.generate_presigned_url('get_object',
+                                                    Params={'Bucket': S3_BUCKET, 'Key': BACKGROUND_IMAGE_KEY},
+                                                    ExpiresIn=3600)
+    except ClientError as e:
+        print(f"Failed to get presigned URL due to: {e}")
+        return url_for('static', filename='default.png')  # Fallback image
+    return response
+
+@app.route("/about", methods=['GET', 'POST'])
 def about():
-    background_image_url = fetch_background_image_url()
-    return render_template('about.html', background_image=background_image_url)
+    image_url = fetch_background_image_url()
+    return render_template('about.html', background_image=image_url, group_name=GROUP_NAME)
 
 @app.route("/addemp", methods=['POST'])
 def AddEmp():
@@ -55,32 +66,34 @@ def AddEmp():
     last_name = request.form['last_name']
     primary_skill = request.form['primary_skill']
     location = request.form['location']
-
     insert_sql = "INSERT INTO employee VALUES (%s, %s, %s, %s, %s)"
+    
     cursor = db_conn.cursor()
-
     try:
         cursor.execute(insert_sql, (emp_id, first_name, last_name, primary_skill, location))
         db_conn.commit()
-        emp_name = first_name + " " + last_name
+        emp_name = f"{first_name} {last_name}"
+    except Exception as e:
+        print(f"Error inserting employee: {e}")
+        emp_name = "Error adding employee"
     finally:
         cursor.close()
 
-    print(f"All modifications done. Employee {emp_name} added successfully.")
-    return render_template('addempoutput.html', name=emp_name, background_image=fetch_background_image_url())
+    image_url = fetch_background_image_url()
+    return render_template('addempoutput.html', name=emp_name, background_image=image_url, group_name=GROUP_NAME)
 
 @app.route("/getemp", methods=['GET', 'POST'])
 def GetEmp():
-    background_image_url = fetch_background_image_url()
-    return render_template("getemp.html", background_image=background_image_url)
+    image_url = fetch_background_image_url()
+    return render_template("getemp.html", background_image=image_url, group_name=GROUP_NAME)
 
-@app.route("/fetchdata", methods=['GET', 'POST'])
+@app.route("/fetchdata", methods=['POST'])
 def FetchData():
     emp_id = request.form['emp_id']
     select_sql = "SELECT emp_id, first_name, last_name, primary_skill, location from employee where emp_id = %s"
+    
     cursor = db_conn.cursor()
     output = {}
-
     try:
         cursor.execute(select_sql, (emp_id,))
         result = cursor.fetchone()
@@ -94,10 +107,20 @@ def FetchData():
             }
     except Exception as e:
         print(f"Error fetching data: {e}")
+        output["error"] = "Error fetching employee data"
     finally:
         cursor.close()
 
-    return render_template("getempoutput.html", **output, background_image=fetch_background_image_url())
+    image_url = fetch_background_image_url()
+    return render_template("getempoutput.html", **output, background_image=image_url, group_name=GROUP_NAME)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=81, debug=True)  # Set to run on port 81
+    # Command line arguments for optional settings
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--color', help='Set the background color for the app', required=False)
+    args = parser.parse_args()
+    
+    if args.color and args.color in color_codes:
+        COLOR = color_codes[args.color]
+    
+    app.run(host='0.0.0.0', port=81, debug=True)
