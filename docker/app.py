@@ -1,39 +1,91 @@
-from flask import Flask, render_template, request, url_for
-import os
-import boto3
-import botocore
+from flask import Flask, render_template, request
 from pymysql import connections
+import os
+import random
+import argparse
 
 app = Flask(__name__)
 
 DBHOST = os.environ.get("DBHOST") or "localhost"
 DBUSER = os.environ.get("DBUSER") or "root"
-DBPWD = os.environ.get("DBPWD") or "password"
+DBPWD = os.environ.get("DBPWD") or "password"  # Corrected typo from 'passwors' to 'password'
 DATABASE = os.environ.get("DATABASE") or "employees"
 DBPORT = int(os.environ.get("DBPORT") or 3306)
-BACKGROUND_IMAGE = os.environ.get("BACKGROUND_IMAGE")
-GROUP_NAME = os.environ.get('GROUP_NAME') or "Group11"
-
-def download_image_from_s3(image_url):
-    bucket = image_url.split('//')[1].split('.')[0]
-    object_name = '/'.join(image_url.split('//')[1].split('/')[1:])
-    s3 = boto3.resource('s3')
-    output = "static/background_image.png"
-    s3.Bucket(bucket).download_file(object_name, output)
-    return output
 
 db_conn = connections.Connection(
     host=DBHOST,
     port=DBPORT,
     user=DBUSER,
-    password=DBPWD,
+    password=DBPWD, 
     db=DATABASE
 )
 
+color_codes = {
+    "red": "#e74c3c",
+    "green": "#16a085",
+    "blue": "#89CFF0",
+    "blue2": "#30336b",
+    "pink": "#f4c2c2",
+    "darkblue": "#130f40",
+    "lime": "#C1FF9C",
+}
+
+COLOR = random.choice(list(color_codes.keys()))
+
 @app.route("/", methods=['GET', 'POST'])
 def home():
-    image_url = download_image_from_s3(BACKGROUND_IMAGE)
-    return render_template('addemp.html', background_image=image_url, group_name=GROUP_NAME)
+    return render_template('addemp.html', color=color_codes[COLOR])
+
+@app.route("/about", methods=['GET','POST'])
+def about():
+    return render_template('about.html', color=color_codes[COLOR])
+
+@app.route("/addemp", methods=['POST'])
+def AddEmp():
+    emp_id = request.form['emp_id']
+    first_name = request.form['first_name']
+    last_name = request.form['last_name']
+    primary_skill = request.form['primary_skill']
+    location = request.form['location']
+
+    insert_sql = "INSERT INTO employee VALUES (%s, %s, %s, %s, %s)"
+    cursor = db_conn.cursor()
+    try:
+        cursor.execute(insert_sql, (emp_id, first_name, last_name, primary_skill, location))
+        db_conn.commit()
+        emp_name = first_name + " " + last_name
+    finally:
+        cursor.close()
+
+    return render_template('addempoutput.html', name=emp_name, color=color_codes[COLOR])
+
+@app.route("/getemp", methods=['GET', 'POST'])
+def GetEmp():
+    return render_template("getemp.html", color=color_codes[COLOR])
+
+@app.route("/fetchdata", methods=['GET', 'POST'])
+def FetchData():
+    emp_id = request.form['emp_id']
+    output = {}
+    select_sql = "SELECT emp_id, first_name, last_name, primary_skill, location from employee where emp_id=%s"
+    cursor = db_conn.cursor()
+    try:
+        cursor.execute(select_sql, (emp_id,))
+        result = cursor.fetchone()
+        if result:
+            output = {
+                "emp_id": result[0],
+                "first_name": result[1],
+                "last_name": result[2],
+                "primary_skills": result[3],
+                "location": result[4]
+            }
+    except Exception as e:
+        print(e)
+    finally:
+        cursor.close()
+
+    return render_template("getempoutput.html", **output, color=color_codes[COLOR])
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=81, debug=True) 
+    app.run(host='0.0.0.0', port=81, debug=True)
