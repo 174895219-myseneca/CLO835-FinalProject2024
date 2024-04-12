@@ -2,7 +2,7 @@ name: Deploy to ECR
 
 on:
   push:
-    branches: [dev]  # This will trigger the workflow on pushes to the dev branch
+    branches: [dev]  # Triggers the workflow on pushes to the dev branch
 
 jobs:
   build-and-deploy:
@@ -30,7 +30,6 @@ jobs:
         run: |
           echo "Building MySQL Image..."
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f ./docker/Dockerfile_mysql ./docker
-
       - name: Unit test MySQL image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -45,7 +44,6 @@ jobs:
           docker stop mysql_test
           docker rm mysql_test
           echo "MySQL unit tests completed successfully."
-
       - name: Push MySQL image to Amazon ECR
         if: success() # Only push if previous steps were successful
         env:
@@ -56,36 +54,25 @@ jobs:
           echo "Pushing MySQL Image..."
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           echo "MySQL image pushed successfully."
-
+          
       - name: Build Flask app image
         env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: finalproject-webapp
           IMAGE_TAG: webapp-${{ github.run_number }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
-          S3_BUCKET_URL: ${{ secrets.S3_BUCKET_URL }} 
         run: |
           echo "Building Flask WebAPP Image..."
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f ./docker/Dockerfile ./docker
-            --build-arg AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
-            --build-arg AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
-            --build-arg AWS_SESSION_TOKEN=$AWS_SESSION_TOKEN \
-            --build-arg S3_BUCKET_URL=$S3_BUCKET_URL \
+          docker build -t ${{ steps.login-ecr.outputs.registry }}/finalproject-webapp:$IMAGE_TAG \
+            --build-arg AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} \
+            --build-arg AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} \
+            --build-arg AWS_SESSION_TOKEN=${{ secrets.AWS_SESSION_TOKEN }} \
+            --build-arg S3_BUCKET_URL=${{ secrets.S3_BUCKET_URL }} \
             -f ./docker/Dockerfile ./docker
 
       - name: Unit test Flask app image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: finalproject-webapp
-          IMAGE_TAG: webapp-${{ github.run_number }}
         run: |
           echo "Running Flask WebAPP container for unit testing..."
-          docker run -d --name webapp_test -p 8080:81 $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker run -d --name webapp_test -p 8080:81 ${{ steps.login-ecr.outputs.registry }}/finalproject-webapp:$IMAGE_TAG
           echo "Waiting for Flask WebAPP to be ready..."
           sleep 10
-          # Replace 'curl localhost:8080' with your actual health check or test command for Flask app
           if curl -s http://localhost:8080/; then
             echo "Flask WebAPP unit tests completed successfully."
           else
@@ -97,15 +84,10 @@ jobs:
 
       - name: Push Flask app image to Amazon ECR
         if: success() # Only push if previous steps were successful
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: finalproject-webapp
-          IMAGE_TAG: webapp-${{ github.run_number }}
         run: |
           echo "Pushing Flask WebAPP Image..."
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push ${{ steps.login-ecr.outputs.registry }}/finalproject-webapp:$IMAGE_TAG
           echo "Flask WebAPP image pushed successfully."
-
 
       - name: Verify Deployment
         run: |
