@@ -33,6 +33,13 @@ color_codes = {
 
 COLOR = random.choice(list(color_codes.keys()))
 
+def download_image_from_s3(image_url):
+    bucket = image_url.split('/')[2].split('.')[0]  
+    object_name = '/'.join(image_url.split('/')[3:])  
+    print(f"Attempting to download from Bucket: {bucket}, Object: {object_name}")
+    
+
+
 @app.route("/", methods=['GET', 'POST'])
 def home():
     return render_template('addemp.html', color=color_codes[COLOR])
