@@ -2,28 +2,20 @@ FROM ubuntu:20.04
 
 # Install dependencies
 RUN apt-get update -y && \
-    apt-get install -y python3-pip mysql-client && \
+    apt-get install -y python3-pip python3-dev mysql-client && \
     pip install --upgrade pip
 
-# Copy application source
-COPY . /app
+# Set working directory
 WORKDIR /app
 
 # Install Python dependencies
+COPY docker/requirements.txt /app/
 RUN pip install -r requirements.txt
 
-ARG AWS_ACCESS_KEY_ID
-ARG AWS_SECRET_ACCESS_KEY
-ARG AWS_SESSION_TOKEN
-ARG S3_BUCKET_URL
+# Copy application source
+COPY docker/ /app/
 
-# Set the AWS credentials and S3 bucket URL as environment variables
-ENV AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
-    AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
-    AWS_SESSION_TOKEN=$AWS_SESSION_TOKEN \  
-    S3_BUCKET_URL=$S3_BUCKET_URL
-
-EXPOSE 8080
+EXPOSE 81
 
 # Run the application
 ENTRYPOINT ["python3"]
