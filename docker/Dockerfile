@@ -14,7 +14,7 @@ COPY docker/requirements.txt ./
 RUN pip install -r requirements.txt
 
 # Copy application source
-COPY ./docker/ /app/
+COPY . /app
 
 EXPOSE 81
 
