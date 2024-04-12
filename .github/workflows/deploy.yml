@@ -66,7 +66,7 @@ jobs:
             --build-arg AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} \
             --build-arg AWS_SESSION_TOKEN=${{ secrets.AWS_SESSION_TOKEN }} \
             --build-arg S3_BUCKET_URL=${{ secrets.S3_BUCKET_URL }} \
-            -f ./docker/Dockerfile ./docker
+            -f ./docker/Dockerfile .
 
 
       - name: Unit test Flask app image

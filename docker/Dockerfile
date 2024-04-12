@@ -10,11 +10,11 @@ WORKDIR /app
 
 # Install Python dependencies
 # Copying only the requirements.txt initially to leverage Docker cache
-COPY docker/requirements.txt ./
+COPY requirements.txt ./
 RUN pip install -r requirements.txt
 
 # Copy application source
-COPY docker/ ./
+COPY . /app
 
 EXPOSE 81
 
