@@ -54,18 +54,18 @@ jobs:
           echo "Pushing MySQL Image..."
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           echo "MySQL image pushed successfully."
-          
+
       - name: Build Flask app image
         env:
           IMAGE_TAG: webapp-${{ github.run_number }}
         run: |
           echo "Building Flask WebAPP Image..."
-          docker build -t ${{ steps.login-ecr.outputs.registry }}/finalproject-webapp:$IMAGE_TAG \
+          docker build -t ${{ steps.login-ecr.outputs.registry }}/finalproject-webapp:$IMAGE_TAG -f ./docker/Dockerfile ./docker \
             --build-arg AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} \
             --build-arg AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} \
             --build-arg AWS_SESSION_TOKEN=${{ secrets.AWS_SESSION_TOKEN }} \
             --build-arg S3_BUCKET_URL=${{ secrets.S3_BUCKET_URL }} \
-            -f ./docker/Dockerfile ./docker
+            -f ./docker/Dockerfile ./
 
       - name: Unit test Flask app image
         run: |
