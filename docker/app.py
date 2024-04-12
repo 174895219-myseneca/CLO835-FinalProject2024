@@ -1,18 +1,24 @@
 from flask import Flask, render_template, request
 from pymysql import connections
 import os
-import random
+import boto3
+from botocore.exceptions import ClientError
 import argparse
 
 app = Flask(__name__)
 
-# Corrected the environment variable names
+# Database configuration from environment variables
 DBHOST = os.environ.get("DBHOST", "localhost")
 DBUSER = os.environ.get("DBUSER", "root")
-DBPWD = os.environ.get("DBPWD", "password")
+DBPWD = os.environ.get("DBPWD", "password")  # Corrected typo from 'passwors'
 DATABASE = os.environ.get("DATABASE", "employees")
 DBPORT = int(os.environ.get("DBPORT", 3306))
 
+# AWS S3 and ConfigMap configuration
+S3_BUCKET = os.environ.get("S3_BUCKET")
+BACKGROUND_IMAGE = os.environ.get("BACKGROUND_IMAGE")  # This will be the file name stored in the ConfigMap
+
+# Create a connection to the MySQL database
 db_conn = connections.Connection(
     host=DBHOST,
     port=DBPORT,
@@ -21,32 +27,38 @@ db_conn = connections.Connection(
     db=DATABASE
 )
 
-color_codes = {
-    "red": "#e74c3c",
-    "green": "#16a085",
-    "blue": "#89CFF0",
-    "blue2": "#30336b",
-    "pink": "#f4c2c2",
-    "darkblue": "#130f40",
-    "lime": "#C1FF9C",
-}
+def get_s3_client():
+    """Create an S3 client configured from environment variables"""
+    aws_access_key_id = os.environ.get("AWS_ACCESS_KEY_ID")
+    aws_secret_access_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
+    return boto3.client(
+        's3',
+        aws_access_key_id=aws_access_key_id,
+        aws_secret_access_key=aws_secret_access_key
+    )
 
-COLOR = random.choice(list(color_codes.keys()))
-
-def download_image_from_s3(image_url):
-    bucket = image_url.split('/')[2].split('.')[0]  
-    object_name = '/'.join(image_url.split('/')[3:])  
-    print(f"Attempting to download from Bucket: {bucket}, Object: {object_name}")
-    
-
+def fetch_background_image_url():
+    """Generate a presigned URL for the background image stored in S3"""
+    s3_client = get_s3_client()
+    try:
+        response = s3_client.generate_presigned_url('get_object',
+                                                    Params={'Bucket': S3_BUCKET,
+                                                            'Key': BACKGROUND_IMAGE},
+                                                    ExpiresIn=3600)
+    except ClientError as e:
+        print(f"Couldn't fetch background image from S3: {e}")
+        return None
+    return response
 
 @app.route("/", methods=['GET', 'POST'])
 def home():
-    return render_template('addemp.html', color=color_codes[COLOR])
+    background_image_url = fetch_background_image_url()
+    return render_template('addemp.html', background_image=background_image_url)
 
 @app.route("/about", methods=['GET','POST'])
 def about():
-    return render_template('about.html', color=color_codes[COLOR])
+    background_image_url = fetch_background_image_url()
+    return render_template('about.html', background_image=background_image_url)
 
 @app.route("/addemp", methods=['POST'])
 def AddEmp():
@@ -56,37 +68,48 @@ def AddEmp():
     primary_skill = request.form['primary_skill']
     location = request.form['location']
 
-    
-    insert_sql = "INSERT INTO employee (first_name, last_name, primary_skill, location) VALUES (%s, %s, %s)"
+    insert_sql = "INSERT INTO employee VALUES (%s, %s, %s, %s, %s)"
     cursor = db_conn.cursor()
+
     try:
-        cursor.execute(insert_sql, (first_name, last_name, primary_skill, location))  
+        cursor.execute(insert_sql, (emp_id, first_name, last_name, primary_skill, location))
         db_conn.commit()
         emp_name = first_name + " " + last_name
-    except Exception as e:
-        print("Failed to insert data:", e)
     finally:
         cursor.close()
 
-    return render_template('addempoutput.html', name=emp_name, color=color_codes[COLOR])
+    print(f"All modifications done. Employee {emp_name} added successfully.")
+    return render_template('addempoutput.html', name=emp_name, background_image=fetch_background_image_url())
 
 @app.route("/getemp", methods=['GET', 'POST'])
 def GetEmp():
-    return render_template("getemp.html", color=color_codes[COLOR])
+    background_image_url = fetch_background_image_url()
+    return render_template("getemp.html", background_image=background_image_url)
 
 @app.route("/fetchdata", methods=['GET', 'POST'])
 def FetchData():
     emp_id = request.form['emp_id']
-    output = {}
-    select_sql = "SELECT emp_id, first_name, last_name, primary_skills, location from employee where emp_id=%s"
+    select_sql = "SELECT emp_id, first_name, last_name, primary_skill, location from employee where emp_id = %s"
     cursor = db_conn.cursor()
-   
-   if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--color', required=False, help="Set the color for the app")
-    args = parser.parse_args()
+    output = {}
 
-    COLOR = args.color if args.color else random.choice(list(color_codes.keys()))
+    try:
+        cursor.execute(select_sql, (emp_id,))
+        result = cursor.fetchone()
+        if result:
+            output = {
+                "emp_id": result[0],
+                "first_name": result[1],
+                "last_name": result[2],
+                "primary_skills": result[3],
+                "location": result[4]
+            }
+    except Exception as e:
+        print(f"Error fetching data: {e}")
+    finally:
+        cursor.close()
+
+    return render_template("getempoutput.html", **output, background_image=fetch_background_image_url())
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=81, debug=False)
+    app.run(host='0.0.0.0', port=81, debug=True)  # Set to run on port 81
