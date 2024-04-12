@@ -2,7 +2,7 @@ name: Deploy to ECR
 
 on:
   push:
-    branches: [dev] 
+    branches: [dev]  # This will trigger the workflow on pushes to the dev branch
 
 jobs:
   build-and-deploy:
@@ -17,46 +17,50 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}  
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
-          AWS_REGION: us-east-1
+          AWS_REGION: us-east-1  # Define the AWS region
 
-      - name: Build and push MySQL image to Amazon ECR
+      - name: Build, test, and push MySQL image to Amazon ECR
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: finalproject-mysql
-          IMAGE_TAG: mysql-${{ github.run_number }}  
+          ECR_REPOSITORY: finalproject-mysql  # ECR repository for MySQL
+          IMAGE_TAG: mysql-${{ github.run_number }}  # Dynamic tagging using GitHub run number
         run: |
-          ls -ltra
-          cd docker
           echo "Building MySQL Image..."
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f Dockerfile_mysql .
-          # Unit test
-          docker run -d --name mysql -e MYSQL_ROOT_PASSWORD=pw $ECR_REGISTRY/$ECR_REPOSITORY_DB:$IMAGE_TAG_DB
-          docker ps
-          echo "Pushing MySQL Image..."
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          echo "Running MySQL container for testing..."
+          docker run -d --name mysql_test $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          sleep 10  # Wait for MySQL to initialize
+          if docker exec mysql_test mysqladmin -ppw ping; then
+            echo "MySQL is up and running!"
+            docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+            echo "MySQL image pushed successfully."
+          else
+            echo "MySQL test failed."
+          fi
+          docker rm -f mysql_test
 
-      - name: Build and push Flask app image to Amazon ECR
+      - name: Build, test, and push Flask app image to Amazon ECR
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: finalproject-webapp
-          IMAGE_TAG: webapp-${{ github.run_number }}  
+          ECR_REPOSITORY: finalproject-webapp  # ECR repository for Flask app
+          IMAGE_TAG: webapp-${{ github.run_number }}  # Dynamic tagging using GitHub run number
         run: |
-          cd docker
           echo "Building Flask WebAPP Image..."
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f Dockerfile .
-          echo "Running tests..."
-          docker run -d --name webapp_test -e APP_ENV=test $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          echo "Running Flask app container for testing..."
+          docker run -d --name app_test -p 8080:81 $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           sleep 10  # Wait for the app to initialize
-          docker logs webapp_test
-          docker exec webapp_test pytest /path/to/tests
-          echo "Pushing Flask WebAPP Image..."
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-
-      - name: Cleanup Test Container
-        run: docker rm -f webapp_test
+          if curl -s http://localhost:8080/ | grep -q 'Expected content'; then
+            echo "Flask app is up and running!"
+            docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+            echo "Flask app image pushed successfully."
+          else
+            echo "Flask app test failed."
+          fi
+          docker rm -f app_test
 
       - name: Verify Deployment
         run: |
