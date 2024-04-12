@@ -37,26 +37,11 @@ def get_s3_client():
         aws_secret_access_key=aws_secret_access_key
     )
 
-def download_s3_image():
-    """Download an image from S3 to static directory."""
-    s3_client = boto3.client('s3', aws_access_key_id=ASIASUOZELOHJF63SV5K, aws_secret_access_key=+xGeMOW6W/nRmziaG9tuYunZ9a5YQXmh2GjaDWm/)
-    try:
-        with open('static/background_image.png', 'wb') as f:
-            s3_client.download_fileobj(S3_BUCKET, BACKGROUND_IMAGE_KEY, f)
-        return url_for('static', filename='background_image.png')
-    except botocore.exceptions.ClientError as error:
-        print(f"Failed to download from S3: {error}")
-        return url_for('static', filename='default.png')  # Fallback image
 
-@app.route("/", methods=['GET', 'POST'])
+@app.route("/")
 def home():
     image_url = download_s3_image()
-    return render_template('addemp.html', background_image=image_url)
-
-@app.route("/", methods=['GET', 'POST'])
-def home():
-    background_image_url = fetch_background_image_url()
-    return render_template('addemp.html', background_image=background_image_url)
+    return render_template('addemp.html', background_image=image_url
 
 @app.route("/about", methods=['GET','POST'])
 def about():
