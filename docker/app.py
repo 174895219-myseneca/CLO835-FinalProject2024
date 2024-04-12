@@ -7,18 +7,17 @@ import argparse
 
 app = Flask(__name__)
 
-# Database configuration from environment variables
+# Configurations directly from environment variables
 DBHOST = os.environ.get("DBHOST", "localhost")
 DBUSER = os.environ.get("DBUSER", "root")
-DBPWD = os.environ.get("DBPWD", "password")  # Corrected typo from 'passwors'
+DBPWD = os.environ.get("DBPWD", "password")
 DATABASE = os.environ.get("DATABASE", "employees")
 DBPORT = int(os.environ.get("DBPORT", 3306))
-
-# AWS S3 and ConfigMap configuration
+AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY")
 S3_BUCKET = os.environ.get("S3_BUCKET")
-BACKGROUND_IMAGE = os.environ.get("BACKGROUND_IMAGE")  # This will be the file name stored in the ConfigMap
+BACKGROUND_IMAGE_KEY = os.environ.get("BACKGROUND_IMAGE_KEY")
 
-# Create a connection to the MySQL database
 db_conn = connections.Connection(
     host=DBHOST,
     port=DBPORT,
@@ -27,21 +26,22 @@ db_conn = connections.Connection(
     db=DATABASE
 )
 
-def get_s3_client():
-    """Create an S3 client configured from environment variables"""
-    aws_access_key_id = os.environ.get("AWS_ACCESS_KEY_ID")
-    aws_secret_access_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
-    return boto3.client(
-        's3',
-        aws_access_key_id=aws_access_key_id,
-        aws_secret_access_key=aws_secret_access_key
-    )
-
+def download_s3_image():
+    s3_client = boto3.client('s3', aws_access_key_id=AWS_ACCESS_KEY_ID, aws_secret_access_key=AWS_SECRET_ACCESS_KEY)
+    image_path = 'static/background_image.png'
+    try:
+        with open(image_path, 'wb') as f:
+            s3_client.download_fileobj(S3_BUCKET, BACKGROUND_IMAGE_KEY, f)
+        print(f"Successfully downloaded background image from S3 bucket {S3_BUCKET}.")
+        return url_for('static', filename='background_image.png')
+    except botocore.exceptions.ClientError as error:
+        print(f"Error downloading image from S3: {error}")
+        return url_for('static', filename='default.png')
 
 @app.route("/")
 def home():
     image_url = download_s3_image()
-    return render_template('addemp.html', background_image=image_url
+    return render_template('addemp.html', background_image=image_url)
 
 @app.route("/about", methods=['GET','POST'])
 def about():
