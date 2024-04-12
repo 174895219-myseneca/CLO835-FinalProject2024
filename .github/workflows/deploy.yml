@@ -44,6 +44,7 @@ jobs:
           docker stop mysql_test
           docker rm mysql_test
           echo "MySQL unit tests completed successfully."
+
       - name: Push MySQL image to Amazon ECR
         if: success() # Only push if previous steps were successful
         env:
@@ -60,12 +61,13 @@ jobs:
           IMAGE_TAG: webapp-${{ github.run_number }}
         run: |
           echo "Building Flask WebAPP Image..."
-          docker build -t ${{ steps.login-ecr.outputs.registry }}/finalproject-webapp:$IMAGE_TAG -f ./docker/Dockerfile ./docker \
+          docker build -t ${{ steps.login-ecr.outputs.registry }}/finalproject-webapp:$IMAGE_TAG \
             --build-arg AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} \
             --build-arg AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} \
             --build-arg AWS_SESSION_TOKEN=${{ secrets.AWS_SESSION_TOKEN }} \
             --build-arg S3_BUCKET_URL=${{ secrets.S3_BUCKET_URL }} \
-            -f ./docker/Dockerfile ./
+            -f ./docker/Dockerfile ./docker
+
 
       - name: Unit test Flask app image
         run: |
