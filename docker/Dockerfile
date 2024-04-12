@@ -9,11 +9,12 @@ RUN apt-get update -y && \
 WORKDIR /app
 
 # Install Python dependencies
-COPY docker/requirements.txt /app/
+# Copying only the requirements.txt initially to leverage Docker cache
+COPY docker/requirements.txt ./
 RUN pip install -r requirements.txt
 
 # Copy application source
-COPY docker/ /app/
+COPY docker/ ./
 
 EXPOSE 81
 

@@ -24,7 +24,7 @@ AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY")
 
 # Group and slogan configuration
-GROUP_NAME = os.environ.get("GROUP_NAME", "InnovateMax")
+GROUP_NAME = os.environ.get("GROUP_NAME", "Group11")
 SLOGAN = os.environ.get("SLOGAN", "Innovation at its peak!")
 
 # MySQL database connection
@@ -38,23 +38,24 @@ db_conn = connections.Connection(
 
 # Download image from S3
 def download_image_from_s3():
-    s3_client = boto3.client(
-        's3',
-        aws_access_key_id=AWS_ACCESS_KEY_ID,
-        aws_secret_access_key=AWS_SECRET_ACCESS_KEY
-    )
+    """Download an image from S3 to use as a background on the site."""
+    s3_client = boto3.client('s3')
+    s3_image_path = os.environ.get('S3_BUCKET_URL').replace("https://", "").split('/', 1)
+    bucket_name = s3_image_path[0]
+    object_key = s3_image_path[1]
+
     try:
         local_filename = "/tmp/background.jpg"
-        # Assuming the S3_BUCKET_URL is a full path to the file including the bucket name
-        bucket_name = S3_BUCKET_URL.split('/')[2]
-        key = '/'.join(S3_BUCKET_URL.split('/')[3:])
-        s3_client.download_file(bucket_name, key, local_filename)
+        s3_client.download_file(bucket_name, object_key, local_filename)
         print("Background image downloaded: " + local_filename)
         return local_filename
     except NoCredentialsError:
         print("Credentials not available")
         return None
-
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
+        
 @app.route("/", methods=['GET', 'POST'])
 def home():
     background_image = download_image_from_s3()
