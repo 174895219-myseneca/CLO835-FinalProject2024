@@ -54,10 +54,8 @@ jobs:
 
       - name: Run Flask app container for testing
         run: |
-          DBHOST="mysql"
-          echo "MySQL Host IP: $DBHOST"
           docker run -d -p 8080:81 \
-            -e DBHOST="$DBHOST" \
+            -e DBHOST="172.17.0.2" \
             -e DBPORT="3306" \
             -e DBUSER="root" \
             -e DBPWD="pw" \
