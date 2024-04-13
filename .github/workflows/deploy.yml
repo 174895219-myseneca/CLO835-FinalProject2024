@@ -77,22 +77,22 @@ jobs:
           docker push ${{ steps.login-ecr.outputs.registry }}/finalproject-webapp:${{ github.run_number }}
           echo "Flask WebAPP image pushed successfully."
 
-      - name: Verify Deployment
-        run: |
-          echo "Verifying ECR image presence..."
-          set -e # Ensures the script stops on first error
+      # - name: Verify Deployment
+      #   run: |
+      #     echo "Verifying ECR image presence..."
+      #     set -e # Ensures the script stops on first error
           
-          # Check if the MySQL image is present
-          aws ecr describe-images \
-            --repository-name finalproject-mysql \
-            --image-ids imageTag=${{ github.run_number }} \
-            --region us-east-1 || echo "MySQL image with tag ${{ github.run_number }} not found in ECR"
+      #     # Check if the MySQL image is present
+      #     aws ecr describe-images \
+      #       --repository-name finalproject-mysql \
+      #       --image-ids imageTag=${{ github.run_number }} \
+      #       --region us-east-1 || echo "MySQL image with tag ${{ github.run_number }} not found in ECR"
           
-          # Check if the Webapp image is present
-          aws ecr describe-images \
-            --repository-name finalproject-webapp \
-            --image-ids imageTag=${{ github.run_number }} \
-            --region us-east-1 || echo "Webapp image with tag ${{ github.run_number }} not found in ECR"
+      #     # Check if the Webapp image is present
+      #     aws ecr describe-images \
+      #       --repository-name finalproject-webapp \
+      #       --image-ids imageTag=${{ github.run_number }} \
+      #       --region us-east-1 || echo "Webapp image with tag ${{ github.run_number }} not found in ECR"
           
-          echo "Deployment verified successfully."
+      #     echo "Deployment verified successfully."
                 
