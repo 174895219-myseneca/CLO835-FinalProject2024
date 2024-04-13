@@ -27,6 +27,17 @@ jobs:
           docker build -t ${{ steps.login-ecr.outputs.registry }}/finalproject-mysql:${{ github.run_number }} -f docker/Dockerfile_mysql docker/
           echo "MySQL image built successfully."
 
+      - name: Run and Test MySQL container
+        run: |
+          echo "Running MySQL container..."
+          docker run -d --name mysql -e MYSQL_ROOT_PASSWORD=pw ${{ steps.login-ecr.outputs.registry }}/finalproject-mysql:${{ github.run_number }}
+          docker ps
+          
+          echo "Pause for 30 seconds to let container start"
+          sleep 30
+          
+          docker exec mysql mysql -ppw -e "show databases;"
+
       - name: Push MySQL image to Amazon ECR
         run: |
           echo "Pushing MySQL Image..."
@@ -49,7 +60,7 @@ jobs:
             -e S3_BUCKET_URL="${{ secrets.S3_BUCKET_URL }}" \
             ${{ steps.login-ecr.outputs.registry }}/finalproject-webapp:${{ github.run_number }}
           echo "Waiting for Flask WebAPP to be ready..."
-          sleep 10
+          sleep 30
           # Fetch logs to see why it might have failed
           docker logs $(docker ps -aqf "ancestor=${{ steps.login-ecr.outputs.registry }}/finalproject-webapp:${{ github.run_number }}")
           RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/)
