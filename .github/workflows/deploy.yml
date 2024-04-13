@@ -8,19 +8,6 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: pw
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-
     steps:
       - name: Check out code
         uses: actions/checkout@v2
@@ -28,39 +15,44 @@ jobs:
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
-          AWS_REGION: us-east-1  # Define the AWS region
+        with:
+          registries: ${{ secrets.AWS_REGISTRY }}
 
       - name: Build MySQL image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG_DB: mysql-${{ github.run_number }}
         run: |
           echo "Building MySQL Image..."
-          docker build -t $ECR_REGISTRY/finalproject-mysql:$IMAGE_TAG_DB -f docker/Dockerfile_mysql docker/
-          docker push $ECR_REGISTRY/finalproject-mysql:$IMAGE_TAG_DB
+          docker build -t ${{ secrets.AWS_REGISTRY }}/finalproject-mysql:${{ github.run_number }} -f docker/Dockerfile_mysql docker/
+          echo "MySQL image built successfully."
+
+      - name: Push MySQL image to Amazon ECR
+        run: |
+          echo "Pushing MySQL Image..."
+          docker push ${{ secrets.AWS_REGISTRY }}/finalproject-mysql:${{ github.run_number }}
+          echo "MySQL image pushed successfully."
 
       - name: Build Flask app image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG_APP: webapp-${{ github.run_number }}
         run: |
           echo "Building Flask WebAPP Image..."
-          docker build -t $ECR_REGISTRY/finalproject-webapp:$IMAGE_TAG_APP -f docker/Dockerfile docker/
+          docker build -t ${{ secrets.AWS_REGISTRY }}/finalproject-webapp:${{ github.run_number }} -f docker/Dockerfile docker/
           echo "Flask WebAPP image built successfully."
 
+      - name: Push Flask app image to Amazon ECR
+        run: |
+          echo "Pushing Flask WebAPP Image..."
+          docker push ${{ secrets.AWS_REGISTRY }}/finalproject-webapp:${{ github.run_number }}
+          echo "Flask WebAPP image pushed successfully."
+
       - name: Run Flask app container for testing
+        env:
+          MYSQL_HOST: mysql
         run: |
           docker run -d -p 8080:81 \
-            -e DBHOST="172.17.0.2" \
-            -e DBPORT="3306" \
-            -e DBUSER="root" \
-            -e DBPWD="pw" \
-            -e S3_BUCKET_URL="${{ secrets.S3_BUCKET_URL }}" \
-            $ECR_REGISTRY/finalproject-webapp:$IMAGE_TAG_APP
+            -e DBHOST=${{ env.MYSQL_HOST }} \
+            -e DBPORT=3306 \
+            -e DBUSER=root \
+            -e DBPWD=pw \
+            -e S3_BUCKET_URL=${{ secrets.S3_BUCKET_URL }} \
+            ${{ secrets.AWS_REGISTRY }}/finalproject-webapp:${{ github.run_number }}
           echo "Waiting for Flask WebAPP to be ready..."
           sleep 10
           RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/)
@@ -69,16 +61,10 @@ jobs:
             exit 1
           fi
           echo "Flask WebAPP unit tests completed successfully."
-  
-      - name: Push Flask app image to Amazon ECR
-        run: |
-          echo "Pushing Flask WebAPP Image..."
-          docker push $ECR_REGISTRY/finalproject-webapp:$IMAGE_TAG_APP
-          echo "Flask WebAPP image pushed successfully."
 
       - name: Verify Deployment
         run: |
           echo "Verifying that images are pushed to ECR..."
-          aws ecr describe-images --repository-name finalproject-mysql --image-ids imageTag=$IMAGE_TAG_DB
-          aws ecr describe-images --repository-name finalproject-webapp --image-ids imageTag=$IMAGE_TAG_APP
+          aws ecr describe-images --repository-name finalproject-mysql --image-ids imageTag=${{ github.run_number }}
+          aws ecr describe-images --repository-name finalproject-webapp --image-ids imageTag=${{ github.run_number }}
           echo "Deployment verified successfully."
