@@ -18,6 +18,7 @@ COPY templates/ templates/
 
 EXPOSE 81
 
+
 # Run the application
 ENTRYPOINT ["python3"]
 CMD ["app.py"]
