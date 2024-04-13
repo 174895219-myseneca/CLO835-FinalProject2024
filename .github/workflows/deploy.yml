@@ -59,44 +59,51 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY_APP: finalproject-webapp
           IMAGE_TAG_APP: webapp-${{ github.run_number }}
+          DBHOST: '172.17.0.2'  # Use secrets or remove if not applicable
+          DBPORT: '3306'        # Use secrets or remove if not applicable
+          DBUSER: 'root'        # Use secrets or remove if not applicable
+          DBPWD: 'pw'           # Use secrets or remove if not applicable
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+          S3_BUCKET_URL: ${{ secrets.S3_BUCKET_URL }}
+          BACKGROUND_IMAGE: 'https://finalproject-group11.s3.amazonaws.com/carved_faces.jpg'
+        
         run: |
-
-          # Set variables
-          export DBHOST=172.17.0.2
-          export DBPORT=3306
-          export DBUSER=root
-          export DATABASE=employees
-          export DBPWD=pw
-          export BACKGROUND_IMAGE=https://finalproject-group11.s3.amazonaws.com/carved_faces.jpg
-          
           echo "Building Flask WebAPP Image..."
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_APP:$IMAGE_TAG_APP -f ./docker/Dockerfile ./docker \
-            --build-arg AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} \
-            --build-arg AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} \
-            --build-arg AWS_SESSION_TOKEN=${{ secrets.AWS_SESSION_TOKEN }} \
-            --build-arg S3_BUCKET_URL=${{ secrets.S3_BUCKET_URL }}
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_APP:$IMAGE_TAG_APP ./docker \
+            --file ./docker/Dockerfile \
+            --build-arg DBHOST=$DBHOST \
+            --build-arg DBPORT=$DBPORT \
+            --build-arg DBUSER=$DBUSER \
+            --build-arg DBPWD=$DBPWD \
+            --build-arg AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+            --build-arg AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
+            --build-arg AWS_SESSION_TOKEN=$AWS_SESSION_TOKEN \
+            --build-arg S3_BUCKET_URL=$S3_BUCKET_URL \
+            --build-arg BACKGROUND_IMAGE=$BACKGROUND_IMAGE
 
-            - name: Unit test Flask app image
-            env:
-              ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-              ECR_REPOSITORY_APP: finalproject-webapp
-              IMAGE_TAG_APP: webapp-${{ github.run_number }}
-            run: |
-              echo "Running Flask WebAPP container for unit testing..."
-              CONTAINER_ID=$(docker run -p 8080:81 -e DBHOST=$DBHOST -e DBPORT=$DBPORT -e DBUSER=$DBUSER -e DBPWD=$DBPWD myapp $ECR_REGISTRY/$ECR_REPOSITORY_APP:$IMAGE_TAG_APP)
-              sleep 10
-              docker logs $CONTAINER_ID
-              RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/)
-              if [ "$RESPONSE" = "200" ]; then
-                echo "Flask WebAPP unit tests completed successfully."
-              else
-                echo "Flask WebAPP unit tests failed with status code: $RESPONSE"
-                docker stop $CONTAINER_ID
-                docker rm $CONTAINER_ID
-                exit 1
-              fi
-              docker stop $CONTAINER_ID
-              docker rm $CONTAINER_ID          
+      - name: Unit test Flask app image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY_APP: finalproject-webapp
+          IMAGE_TAG_APP: webapp-${{ github.run_number }}
+        run: |
+          echo "Running Flask WebAPP container for unit testing..."
+          CONTAINER_ID=$(docker run -dp 8080:81 $ECR_REGISTRY/$ECR_REPOSITORY_APP:$IMAGE_TAG_APP)
+          sleep 10
+          docker logs $CONTAINER_ID
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/)
+          if [ "$RESPONSE" = "200" ]; then
+            echo "Flask WebAPP unit tests completed successfully."
+          else
+            echo "Flask WebAPP unit tests failed with status code: $RESPONSE"
+            docker stop $CONTAINER_ID
+            docker rm $CONTAINER_ID
+            exit 1
+          fi
+          docker stop $CONTAINER_ID
+          docker rm $CONTAINER_ID
 
       - name: Push Flask app image to Amazon ECR
         if: success()
