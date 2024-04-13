@@ -39,29 +39,32 @@ jobs:
           docker build -t ${{ steps.login-ecr.outputs.registry }}/finalproject-webapp:${{ github.run_number }} -f docker/Dockerfile docker/
           echo "Flask WebAPP image built successfully."
 
-      - name: Push Flask app image to Amazon ECR
-        run: |
-          echo "Pushing Flask WebAPP Image..."
-          docker push ${{ steps.login-ecr.outputs.registry }}/finalproject-webapp:${{ github.run_number }}
-          echo "Flask WebAPP image pushed successfully."
-
       - name: Run Flask app container for testing
         run: |
           docker run -d -p 8080:81 \
-            -e DBHOST=172.17.0.2 \
-            -e DBPORT=3306 \
-            -e DBUSER=root \
-            -e DBPWD=pw \
-            -e S3_BUCKET_URL=${{ secrets.S3_BUCKET_URL }} \
+            -e DBHOST="172.17.0.2" \
+            -e DBPORT="3306" \
+            -e DBUSER="root" \
+            -e DBPWD="pw" \
+            -e S3_BUCKET_URL="${{ secrets.S3_BUCKET_URL }}" \
             ${{ steps.login-ecr.outputs.registry }}/finalproject-webapp:${{ github.run_number }}
           echo "Waiting for Flask WebAPP to be ready..."
           sleep 10
+          # Fetch logs to see why it might have failed
+          docker logs $(docker ps -aqf "ancestor=${{ steps.login-ecr.outputs.registry }}/finalproject-webapp:${{ github.run_number }}")
           RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/)
           if [ "$RESPONSE" -ne 200 ]; then
             echo "Flask WebAPP unit tests failed with status code: $RESPONSE"
             exit 1
           fi
           echo "Flask WebAPP unit tests completed successfully."
+
+      - name: Push Flask app image to Amazon ECR
+        if: success()
+        run: |
+          echo "Pushing Flask WebAPP Image..."
+          docker push ${{ steps.login-ecr.outputs.registry }}/finalproject-webapp:${{ github.run_number }}
+          echo "Flask WebAPP image pushed successfully."
 
       - name: Verify Deployment
         run: |
