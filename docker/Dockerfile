@@ -13,7 +13,8 @@ COPY requirements.txt ./
 RUN pip install -r requirements.txt
 
 # Copy application source
-COPY . /app
+COPY app.py ./
+COPY templates/ templates/
 
 EXPOSE 81
 

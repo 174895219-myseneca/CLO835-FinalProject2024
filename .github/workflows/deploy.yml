@@ -6,16 +6,24 @@ on:
 
 jobs:
   build-and-deploy:
-    name: Build and Deploy to ECR
     runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: pw
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
 
     steps:
       - name: Check out code
         uses: actions/checkout@v2
-
-      - name: Set up Docker Buildx
-        id: buildx
-        uses: docker/setup-buildx-action@v1
 
       - name: Login to Amazon ECR
         id: login-ecr
@@ -26,57 +34,34 @@ jobs:
           AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
           AWS_REGION: us-east-1  # Define the AWS region
 
-      - name: Create Docker Network
-        run: |
-          docker network create my_network
-
       - name: Build MySQL image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY_DB: finalproject-mysql
           IMAGE_TAG_DB: mysql-${{ github.run_number }}
         run: |
           echo "Building MySQL Image..."
-          docker buildx build --load \
-            --network my_network \
-            -t $ECR_REGISTRY/$ECR_REPOSITORY_DB:$IMAGE_TAG_DB \
-            -f ./docker/Dockerfile_mysql ./docker
-
-      - name: Launch MySQL container
-        run: |
-          docker run -d --network my_network --name mysql_container ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_DB }}:${{ env.IMAGE_TAG_DB }}
-          sleep 10  # Allow MySQL to initialize
+          docker build -t $ECR_REGISTRY/finalproject-mysql:$IMAGE_TAG_DB -f docker/Dockerfile_mysql docker/
+          docker push $ECR_REGISTRY/finalproject-mysql:$IMAGE_TAG_DB
 
       - name: Build Flask app image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY_APP: finalproject-webapp
           IMAGE_TAG_APP: webapp-${{ github.run_number }}
         run: |
           echo "Building Flask WebAPP Image..."
-          docker buildx build --load \
-            --network my_network \
-            -t $ECR_REGISTRY/$ECR_REPOSITORY_APP:$IMAGE_TAG_APP \
-            --build-arg DBHOST=mysql_container \
-            --build-arg DBPORT=3306 \
-            --build-arg DBUSER=root \
-            --build-arg DBPWD=password \
-            --build-arg AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} \
-            --build-arg AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} \
-            --build-arg AWS_SESSION_TOKEN=${{ secrets.AWS_SESSION_TOKEN }} \
-            --build-arg S3_BUCKET_URL=${{ secrets.S3_BUCKET_URL }} \
-            --build-arg BACKGROUND_IMAGE='https://finalproject-group11.s3.amazonaws.com/carved_faces.jpg' \
-            -f ./docker/Dockerfile ./docker
+          docker build -t $ECR_REGISTRY/finalproject-webapp:$IMAGE_TAG_APP -f docker/Dockerfile docker/
+          echo "Flask WebAPP image built successfully."
 
-      - name: Run and test Flask app container
+      - name: Run Flask app container for testing
         run: |
-          CONTAINER_ID=$(docker run -dp 8080:81 --network my_network --name flask_app ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_APP }}:${{ env.IMAGE_TAG_APP }})
+          DBHOST=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' mysql)
+          echo "MySQL Host IP: $DBHOST"
+          docker run -d -p 8080:81 -e DBHOST=$DBHOST -e DBPORT=3306 -e DBUSER=root -e DBPWD=pw -e S3_BUCKET_URL=${{ secrets.S3_BUCKET_URL }} $ECR_REGISTRY/finalproject-webapp:$IMAGE_TAG_APP
+          echo "Waiting for Flask WebAPP to be ready..."
           sleep 10
           RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/)
           if [ "$RESPONSE" -ne 200 ]; then
             echo "Flask WebAPP unit tests failed with status code: $RESPONSE"
-            docker stop $CONTAINER_ID
-            docker rm $CONTAINER_ID
             exit 1
           fi
           echo "Flask WebAPP unit tests completed successfully."
@@ -84,15 +69,12 @@ jobs:
       - name: Push Flask app image to Amazon ECR
         run: |
           echo "Pushing Flask WebAPP Image..."
-          docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_APP }}:${{ env.IMAGE_TAG_APP }}
+          docker push $ECR_REGISTRY/finalproject-webapp:$IMAGE_TAG_APP
+          echo "Flask WebAPP image pushed successfully."
 
-      - name: Cleanup
-        run: |
-          docker network rm my_network
-          docker system prune -af
       - name: Verify Deployment
         run: |
           echo "Verifying that images are pushed to ECR..."
-          aws ecr describe-images --repository-name $ECR_REPOSITORY_DB --image-ids imageTag=$IMAGE_TAG_DB
-          aws ecr describe-images --repository-name $ECR_REPOSITORY_APP --image-ids imageTag=$IMAGE_TAG_APP
+          aws ecr describe-images --repository-name finalproject-mysql --image-ids imageTag=$IMAGE_TAG_DB
+          aws ecr describe-images --repository-name finalproject-webapp --image-ids imageTag=$IMAGE_TAG_APP
           echo "Deployment verified successfully."
