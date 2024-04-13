@@ -4,6 +4,8 @@ FROM ubuntu:20.04
 RUN apt-get update -y && \
     apt-get install -y python3-pip python3-dev mysql-client && \
     pip install --upgrade pip
+COPY app.py ./
+COPY templates/ templates/
 
 # Set working directory
 WORKDIR /app
@@ -13,8 +15,7 @@ COPY requirements.txt ./
 RUN pip install -r requirements.txt
 
 # Copy application source
-COPY app.py ./
-COPY templates/ templates/
+
 
 EXPOSE 81
 
