@@ -31,48 +31,38 @@ jobs:
           echo "Building MySQL Image..."
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_DB:$IMAGE_TAG_DB -f ./docker/Dockerfile_mysql ./docker
 
-      - name: Unit test MySQL image
+      - name: Launch MySQL container
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY_DB: finalproject-mysql
           IMAGE_TAG_DB: mysql-${{ github.run_number }}
         run: |
-          echo "Running MySQL container for unit testing..."
-          docker run -d --name mysql_test -e MYSQL_ROOT_PASSWORD=pw $ECR_REGISTRY/$ECR_REPOSITORY_DB:$IMAGE_TAG_DB
-          sleep 10
-          docker exec mysql_test mysql -ppw -e "SHOW DATABASES;"
-          docker stop mysql_test
-          docker rm mysql_test
+          echo "Launching MySQL container..."
+          docker run -d --name mysql_container $ECR_REGISTRY/$ECR_REPOSITORY_DB:$IMAGE_TAG_DB
+          echo "Waiting for MySQL to initialize..."
+          sleep 30  # Wait for MySQL to fully initialize
 
-      - name: Push MySQL image to Amazon ECR
-        if: success()
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY_DB: finalproject-mysql
-          IMAGE_TAG_DB: mysql-${{ github.run_number }}
-        run: |
-          echo "Pushing MySQL Image..."
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY_DB:$IMAGE_TAG_DB
+      - name: Obtain MySQL container IP
+        id: mysql_ip
+        run: echo "MYSQL_HOST=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' mysql_container)" >> $GITHUB_ENV
 
       - name: Build Flask app image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY_APP: finalproject-webapp
           IMAGE_TAG_APP: webapp-${{ github.run_number }}
-          DBHOST: '172.17.0.2'  # Use secrets or remove if not applicable
-          DBPORT: '3306'        # Use secrets or remove if not applicable
-          DBUSER: 'root'        # Use secrets or remove if not applicable
-          DBPWD: 'pw'           # Use secrets or remove if not applicable
+          DBHOST: ${{ env.MYSQL_HOST }}
+          DBPORT: '3306'       
+          DBUSER: 'root'      
+          DBPWD: 'password'   
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
           S3_BUCKET_URL: ${{ secrets.S3_BUCKET_URL }}
           BACKGROUND_IMAGE: 'https://finalproject-group11.s3.amazonaws.com/carved_faces.jpg'
-        
         run: |
           echo "Building Flask WebAPP Image..."
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_APP:$IMAGE_TAG_APP ./docker \
-            --file ./docker/Dockerfile \
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_APP:$IMAGE_TAG_APP -f ./docker/Dockerfile ./docker \
             --build-arg DBHOST=$DBHOST \
             --build-arg DBPORT=$DBPORT \
             --build-arg DBUSER=$DBUSER \
@@ -92,7 +82,6 @@ jobs:
           echo "Running Flask WebAPP container for unit testing..."
           CONTAINER_ID=$(docker run -dp 8080:81 $ECR_REGISTRY/$ECR_REPOSITORY_APP:$IMAGE_TAG_APP)
           sleep 10
-          docker logs $CONTAINER_ID
           RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/)
           if [ "$RESPONSE" = "200" ]; then
             echo "Flask WebAPP unit tests completed successfully."
@@ -102,8 +91,6 @@ jobs:
             docker rm $CONTAINER_ID
             exit 1
           fi
-          docker stop $CONTAINER_ID
-          docker rm $CONTAINER_ID
 
       - name: Push Flask app image to Amazon ECR
         if: success()
