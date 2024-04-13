@@ -15,8 +15,11 @@ jobs:
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
+        env:
+          AWS_REGION: us-east-1  # Define the AWS region
         with:
           registries: ${{ secrets.AWS_REGISTRY }}
+      
 
       - name: Build MySQL image
         run: |
