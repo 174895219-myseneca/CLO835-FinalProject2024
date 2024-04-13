@@ -39,12 +39,8 @@ jobs:
         run: |
           echo "Launching MySQL container..."
           docker run -d --name mysql_container $ECR_REGISTRY/$ECR_REPOSITORY_DB:$IMAGE_TAG_DB
-          echo "Waiting for MySQL to initialize..."
+          echo "MYSQL_HOST=$(docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' mysql_container)" >> $GITHUB_ENV
           sleep 30  # Wait for MySQL to fully initialize
-
-      - name: Obtain MySQL container IP
-        id: mysql_ip
-        run: echo "MYSQL_HOST=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' mysql_container)" >> $GITHUB_ENV
 
       - name: Build Flask app image
         env:
@@ -52,9 +48,9 @@ jobs:
           ECR_REPOSITORY_APP: finalproject-webapp
           IMAGE_TAG_APP: webapp-${{ github.run_number }}
           DBHOST: ${{ env.MYSQL_HOST }}
-          DBPORT: '3306'       
-          DBUSER: 'root'      
-          DBPWD: 'password'   
+          DBPORT: '3306'
+          DBUSER: 'root'
+          DBPWD: 'pw'
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
@@ -62,7 +58,8 @@ jobs:
           BACKGROUND_IMAGE: 'https://finalproject-group11.s3.amazonaws.com/carved_faces.jpg'
         run: |
           echo "Building Flask WebAPP Image..."
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_APP:$IMAGE_TAG_APP -f ./docker/Dockerfile ./docker \
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_APP:$IMAGE_TAG_APP ./docker \
+            --file ./docker/Dockerfile \
             --build-arg DBHOST=$DBHOST \
             --build-arg DBPORT=$DBPORT \
             --build-arg DBUSER=$DBUSER \
@@ -73,14 +70,14 @@ jobs:
             --build-arg S3_BUCKET_URL=$S3_BUCKET_URL \
             --build-arg BACKGROUND_IMAGE=$BACKGROUND_IMAGE
 
-      - name: Unit test Flask app image
+      - name: Run and test Flask app container
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY_APP: finalproject-webapp
           IMAGE_TAG_APP: webapp-${{ github.run_number }}
         run: |
           echo "Running Flask WebAPP container for unit testing..."
-          CONTAINER_ID=$(docker run -dp 8080:81 $ECR_REGISTRY/$ECR_REPOSITORY_APP:$IMAGE_TAG_APP)
+          CONTAINER_ID=$(docker run -dp 8080:81 --name flask_app $ECR_REGISTRY/$ECR_REPOSITORY_APP:$IMAGE_TAG_APP)
           sleep 10
           RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/)
           if [ "$RESPONSE" = "200" ]; then
