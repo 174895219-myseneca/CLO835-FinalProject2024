@@ -79,7 +79,10 @@ jobs:
 
       - name: Verify Deployment
         run: |
-          echo "Verifying that images are pushed to ECR..."
-          aws ecr describe-images --repository-name finalproject-mysql --image-ids imageTag=${{ github.run_number }}
-          aws ecr describe-images --repository-name finalproject-webapp --image-ids imageTag=${{ github.run_number }}
+          echo "Verifying ECR image presence..."
+          aws ecr describe-images --repository-name finalproject-mysql \
+            --image-ids imageTag=${{ github.run_number }}
+          aws ecr describe-images --repository-name finalproject-webapp \
+            --image-ids imageTag=${{ github.run_number }}
           echo "Deployment verified successfully."
+        
