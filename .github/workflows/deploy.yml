@@ -20,45 +20,40 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
           AWS_REGION: us-east-1  # Define the AWS region
-        with:
-          registries: ${{ secrets.AWS_REGISTRY }}
-      
 
       - name: Build MySQL image
         run: |
           echo "Building MySQL Image..."
-          docker build -t ${{ secrets.AWS_REGISTRY }}/finalproject-mysql:${{ github.run_number }} -f docker/Dockerfile_mysql docker/
+          docker build -t ${{ steps.login-ecr.outputs.registry }}/finalproject-mysql:${{ github.run_number }} -f docker/Dockerfile_mysql docker/
           echo "MySQL image built successfully."
 
       - name: Push MySQL image to Amazon ECR
         run: |
           echo "Pushing MySQL Image..."
-          docker push ${{ secrets.AWS_REGISTRY }}/finalproject-mysql:${{ github.run_number }}
+          docker push ${{ steps.login-ecr.outputs.registry }}/finalproject-mysql:${{ github.run_number }}
           echo "MySQL image pushed successfully."
 
       - name: Build Flask app image
         run: |
           echo "Building Flask WebAPP Image..."
-          docker build -t ${{ secrets.AWS_REGISTRY }}/finalproject-webapp:${{ github.run_number }} -f docker/Dockerfile docker/
+          docker build -t ${{ steps.login-ecr.outputs.registry }}/finalproject-webapp:${{ github.run_number }} -f docker/Dockerfile docker/
           echo "Flask WebAPP image built successfully."
 
       - name: Push Flask app image to Amazon ECR
         run: |
           echo "Pushing Flask WebAPP Image..."
-          docker push ${{ secrets.AWS_REGISTRY }}/finalproject-webapp:${{ github.run_number }}
+          docker push ${{ steps.login-ecr.outputs.registry }}/finalproject-webapp:${{ github.run_number }}
           echo "Flask WebAPP image pushed successfully."
 
       - name: Run Flask app container for testing
-        env:
-          MYSQL_HOST: mysql
         run: |
           docker run -d -p 8080:81 \
-            -e DBHOST=${{ env.MYSQL_HOST }} \
+            -e DBHOST=172.17.0.2 \
             -e DBPORT=3306 \
             -e DBUSER=root \
             -e DBPWD=pw \
             -e S3_BUCKET_URL=${{ secrets.S3_BUCKET_URL }} \
-            ${{ secrets.AWS_REGISTRY }}/finalproject-webapp:${{ github.run_number }}
+            ${{ steps.login-ecr.outputs.registry }}/finalproject-webapp:${{ github.run_number }}
           echo "Waiting for Flask WebAPP to be ready..."
           sleep 10
           RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/)
