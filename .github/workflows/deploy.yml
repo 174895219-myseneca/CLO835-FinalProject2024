@@ -67,23 +67,27 @@ jobs:
             --build-arg AWS_SESSION_TOKEN=${{ secrets.AWS_SESSION_TOKEN }} \
             --build-arg S3_BUCKET_URL=${{ secrets.S3_BUCKET_URL }}
 
-      - name: Unit test Flask app image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY_APP: finalproject-webapp
-          IMAGE_TAG_APP: webapp-${{ github.run_number }}
-        run: |
-          echo "Running Flask WebAPP container for unit testing..."
-          docker run -d --name webapp_test -p 8080:81 $ECR_REGISTRY/$ECR_REPOSITORY_APP:$IMAGE_TAG_APP
-          sleep 10
-          if curl -s http://localhost:8080/; then
-            echo "Flask WebAPP unit tests completed successfully."
-          else
-            echo "Flask WebAPP unit tests failed."
-            exit 1
-          fi
-          docker stop webapp_test
-          docker rm webapp_test
+            - name: Unit test Flask app image
+            env:
+              ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+              ECR_REPOSITORY_APP: finalproject-webapp
+              IMAGE_TAG_APP: webapp-${{ github.run_number }}
+            run: |
+              echo "Running Flask WebAPP container for unit testing..."
+              CONTAINER_ID=$(docker run -d -p 8080:81 $ECR_REGISTRY/$ECR_REPOSITORY_APP:$IMAGE_TAG_APP)
+              sleep 10
+              docker logs $CONTAINER_ID
+              RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/)
+              if [ "$RESPONSE" = "200" ]; then
+                echo "Flask WebAPP unit tests completed successfully."
+              else
+                echo "Flask WebAPP unit tests failed with status code: $RESPONSE"
+                docker stop $CONTAINER_ID
+                docker rm $CONTAINER_ID
+                exit 1
+              fi
+              docker stop $CONTAINER_ID
+              docker rm $CONTAINER_ID          
 
       - name: Push Flask app image to Amazon ECR
         if: success()
