@@ -35,7 +35,6 @@ spec:
               key: password
 
 ---
-
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -46,11 +45,11 @@ spec:
     kind: Deployment
     name: webapp-deployment
   minReplicas: 1
-  maxReplicas: 10
+  maxReplicas: 6
   metrics:
   - type: Resource
     resource:
       name: cpu
       target:
         type: Utilization
-        averageUtilization: 50
+        averageUtilization: 3

@@ -1,7 +1,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  namespace: final  # Specify the namespace where the role applies
+ # namespace: final  # Specify the namespace where the role applies
   name: CLO835
 rules:
 - apiGroups: [""]
