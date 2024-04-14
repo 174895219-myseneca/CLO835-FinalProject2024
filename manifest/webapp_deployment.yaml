@@ -21,7 +21,7 @@ spec:
         - containerPort: 81
         envFrom:
         - configMapRef:
-            name: app-config
+            name: app_config
         env:
         - name: DBUSER
           valueFrom:
@@ -36,6 +36,6 @@ spec:
               readinessProbe:       
           httpGet:
             path: /health
-            port: 80
+            port: 81
           initialDelaySeconds: 5
           periodSeconds: 10
