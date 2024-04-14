@@ -18,7 +18,7 @@ spec:
       - name: webapp-container
         image: 544378344870.dkr.ecr.us-east-1.amazonaws.com/clo835-week4:app_fp01
         ports:
-        - containerPort: 80
+        - containerPort: 81
         envFrom:
         - configMapRef:
             name: app-config
