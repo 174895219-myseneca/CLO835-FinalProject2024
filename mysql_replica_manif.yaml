@@ -3,7 +3,7 @@ apiVersion: apps/v1
 kind: ReplicaSet
 metadata:
   name: mysql-replicaset
-  namespace: mydb
+  #namespace: final
   labels:
     app: mysql
 spec:
