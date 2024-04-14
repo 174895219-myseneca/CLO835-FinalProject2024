@@ -1,35 +1,39 @@
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: webapp-deployment
+  name: database-deployment
   labels:
-    app: webapp
+    app: database
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: webapp
+      app: database
   template:
     metadata:
       labels:
-        app: webapp
+        app: database
     spec:
       containers:
-      - name: webapp-container
-        image: 544378344870.dkr.ecr.us-east-1.amazonaws.com/clo835-week4:app_fp01
+      - name: database-container
+        image: 544378344870.dkr.ecr.us-east-1.amazonaws.com/clo835-week4:db_fp01
         ports:
-        - containerPort: 81
+        - containerPort: 3306
         envFrom:
         - configMapRef:
             name: app-config
+        # env:
+        # - name: DBUSER
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: mydb-secret
+        #       key: user
         env:
-        - name: DBUSER
-          valueFrom:
-            secretKeyRef:
-              name: mydb-secret
-              key: user
-        - name: DBPW
-          valueFrom:
-            secretKeyRef:
-              name: mydb-secret
-              key: password
+          - name: MYSQL_ROOT_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: mydb-secret
+                key: password
+
+
