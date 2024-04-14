@@ -49,6 +49,8 @@ spec:
         image: 544378344870.dkr.ecr.us-east-1.amazonaws.com/clo835-week4:db_fp01
         ports:
         - containerPort: 3306
+      imagePullSecrets:
+      - name: ecr-secret
         envFrom:
         - configMapRef:
             name: app-config
