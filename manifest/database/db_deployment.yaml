@@ -1,0 +1,40 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: database-deployment
+  labels:
+    app: database
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: database
+  template:
+    metadata:
+      labels:
+        app: database
+    spec:
+      serviceAccountName: clo835
+      containers:
+      - name: database-container
+        image: 544378344870.dkr.ecr.us-east-1.amazonaws.com/clo835-week4:db_fp01
+        ports:
+        - containerPort: 3306
+        envFrom:
+        - configMapRef:
+            name: app-config
+        # env:
+        # - name: DBUSER
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: mydb-secret
+        #       key: user
+        env:
+          - name: MYSQL_ROOT_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: mydb-secret
+                key: password
+
+
