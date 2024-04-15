@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: group11
+  namespace: final
+data:
+  BACKGROUND_IMAGE: "https://finalprojectgroup11.s3.amazonaws.com/back2.jpeg"
+  GROUP_NAME: "GROUP11"
