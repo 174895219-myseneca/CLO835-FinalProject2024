@@ -1,13 +1,14 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: flask-mysql-service
+  name: employees-nodeport
+  namespace: final
 spec:
   selector:
-    app: webapp  # Match the labels of the Flask application pods
-  type: NodePort
+    app: employees
   ports:
     - protocol: TCP
-      port: 8080  # Adjust the port as needed
-      targetPort: 81  # Point to the port on which the Flask application is listening
+      port: 8080
+      targetPort: 81
       nodePort: 30000
+  type: NodePort
