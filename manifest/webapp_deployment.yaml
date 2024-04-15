@@ -21,7 +21,7 @@ spec:
         - containerPort: 81
         envFrom:
         - configMapRef:
-            name: app_config
+            name: app-config
         env:
         - name: DBUSER
           valueFrom:
@@ -33,9 +33,3 @@ spec:
             secretKeyRef:
               name: mydb-secret
               key: password
-              readinessProbe:       
-          httpGet:
-            path: /health
-            port: 81
-          initialDelaySeconds: 5
-          periodSeconds: 10
