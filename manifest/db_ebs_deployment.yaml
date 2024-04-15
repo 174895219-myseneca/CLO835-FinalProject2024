@@ -44,6 +44,7 @@ spec:
       labels:
         app: database
     spec:
+      serviceAccountName: clo835
       containers:
       - name: database-container
         image: 544378344870.dkr.ecr.us-east-1.amazonaws.com/clo835-week4:db_fp01
@@ -73,4 +74,5 @@ spec:
       - name: database-storage
         persistentVolumeClaim:
           claimName: database-pvc
-
+      imagePullSecrets:
+        - name: ecr-secret
